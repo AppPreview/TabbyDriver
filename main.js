@@ -89,7 +89,9 @@ function createConnection(inputs) {
             console.log(new Buffer(data).toString('ascii'));
         } else if (data && data.message) {
             console.log(data.message);
-        }
+        } else if (data) [
+            console.log('   Connection created.')
+        ]
     });        
 }
  
