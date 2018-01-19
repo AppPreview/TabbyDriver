@@ -57,12 +57,19 @@ function getVstsInfo(inputs) {
 
     console.log('Getting vsts info:')
     client.get(inputs.url + '/_git/' + inputs.project + '/vsts/info', args, function (data, response) {
-        console.log(`   collectionId = ${data.collection.id}`);
-        console.log(`   projectId = ${data.repository.project.id}`);
-        inputs.collectionId = data.collection.id;
-        inputs.projectId = data.repository.project.id;
-        createConnection(inputs);
-    });        
+        if (Buffer.isBuffer(data)) {
+            console.log(`Unable to get vsts info for project: ${inputs.project}. Check your PAT. Details:`);
+            console.log(new Buffer(data).toString('ascii'));
+        } else if (data && data.message) {
+            console.log(data.message);
+        } else if (data) {
+            console.log(`   collectionId = ${data.collection.id}`);
+            console.log(`   projectId = ${data.repository.project.id}`);
+            inputs.collectionId = data.collection.id;
+            inputs.projectId = data.repository.project.id;
+            createConnection(inputs);
+        }
+    }); 
 }
 
 function createConnection(inputs) {
@@ -86,12 +93,20 @@ function createConnection(inputs) {
     console.log('Creating connection:')
     client.post(inputs.url + '/_apis/Pipelines/Connections?provider=github&api-version=4.1-preview', args, function (data, response) {
         if (Buffer.isBuffer(data)) {
-            console.log(new Buffer(data).toString('ascii'));
+            const text = new Buffer(data).toString('ascii');
+            if (text.startsWith('{')) {
+                const json = JSON.parse(text);
+                console.log(`   Connection created. Token =>`);
+                console.log(`   ${json.token}`);
+            } else {
+                console.log(`Unable to create connection. inputs: ${JSON.stringify(args.data)}. Details:`);
+                console.log(text);
+            }
         } else if (data && data.message) {
             console.log(data.message);
-        } else if (data) [
-            console.log('   Connection created.')
-        ]
+        } else {
+            console.log('Unknown error occured');
+        }
     });        
 }
  
