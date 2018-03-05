@@ -131,12 +131,13 @@ async function createConnection(inputs) {
     const result = await client.postPromise(apiURL, args);
     const json = getJson(result);
     if (json) {
-        if (json.status === 'succeeded') {
+        if (json.status === 'succeeded' || json.status === 'Complete') {
             console.log(`   Connection created. Token =>`);
             if (inputs.useOldAPI) {
                 console.log(`   ${json.connection.token}`);                
+            } else {
+                console.log(`   ${json.resultMessage}`);                 
             }
-            console.log(`   ${json.resultMessage}`);                 
         } else {
             let operationsUrl = json.url;
             if (inputs.useOldAPI) {
@@ -189,6 +190,14 @@ async function waitForProjectCreation(operationUrl, inputs) {
 }
 
 function getJson(result) {
+    if (result.response.statusCode < 200 || result.response.statusCode >= 300) {
+        // This is not a success code so print the response and return undefined
+        console.log('RESPONSE: ' + result.response.statusCode);
+        console.log(result.response);
+        console.log('RESPONSE: ' + result.response.statusCode);
+        return undefined;
+    }
+
     const data = result.data;
     if (Buffer.isBuffer(data)) {
         const text = new Buffer(data).toString('ascii');
@@ -205,6 +214,7 @@ function getJson(result) {
     } else {
         console.log('Unknown error occured');
     }
+
     return undefined;
 }
 

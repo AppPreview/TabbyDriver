@@ -9,7 +9,7 @@ Note: you may need a newer version of nodeJS that supports the async/await patte
 ## To Run
 You can provide the needed information on the command line or you will be prompted for it. Most values have defaults.
 
-    >node main.js --useOldAPI true --url https://tabbydemo.visualstudio.com --project Tabby-jlp5 --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
+    >node createConnection.js --useOldAPI true --url https://tabbydemo.visualstudio.com --project Tabby-jlp5 --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
 
     Getting vsts info:
        collectionId = 2c31a8a4-3ce2-4230-954d-29653ac881d9
