@@ -1,44 +1,59 @@
 var prompt = require('prompt');
 var optimist = require('optimist');
-var Client = require('node-rest-client').Client;
+var Client = require('node-rest-client-promise').Client;
 
 var inputs = {
-    url: 'https://me.vsts.me',
+    useOldAPI: true,
+    url: 'https://tabbydemo.visualstudio.com',
     pat: '',
-    collectionId: '',
     projectId: '',
-    project: 'MyProject',
-    repoName: 'xplatalm/cuckoo',
+    project: 'Tabby-jpricket', // TODO put the TabbyDemo id (5f2c7436-88d8-4b1a-879a-7645f0f3710c) here instead of name to reuse that project
+    repoName: 'xplatalm/cuckoo', // Need new test repo
     branch: 'master',
-    installationId: '75537',
+    installationId: '75537', // Need new App id
     yamlPath: '.vsts/microsoft.yml'
 }
 
 // Get any command line args to override prompts
 prompt.override = optimist.argv;
 
-function run(inputs) {
+async function getInputs(inputs) {
     prompt.start();
     var schema = {
         properties: {
+          useOldAPI: { required: true, description: "Use the OLD api", default: inputs.useOldAPI },
           url: { required: true, description: "VSTS account URL", default: inputs.url },
-          project: { required: true, description: "Project name", default: inputs.project},
+          project: { required: true, description: "New project name (or existing id)", default: inputs.project},
           pat: { required: true, description: "PAT token", default: inputs.pat, hidden: true},
           repo: { required: true, description: "GitHub repo name", default: inputs.repoName },
           branch: { required: true, description: "Repo branch", default: inputs.branch },
           installationId: { required: true, description: "GitHub app installation id", default: inputs.installationId },
         }
       };
-    prompt.get(schema, function (err, result) {
-        inputs.url = result.url;
-        inputs.pat = result.pat;
-        inputs.project = result.project;
-        inputs.repoName = result.repo;
-        inputs.branch = result.branch;
-        inputs.installationId = result.installationId;
+    return new Promise((resolve, reject) => 
+        prompt.get(schema, function (err, result) {
+            if (err) {
+                reject(err);
+                return;
+            }
+            inputs.useOldAPI = result.useOldAPI;
+            inputs.url = result.url;
+            inputs.pat = result.pat;
+            inputs.repoName = result.repo;
+            inputs.branch = result.branch;
+            inputs.installationId = result.installationId;
 
-        getVstsInfo(inputs);
-    });
+            // If the user passed in the project Id, put it in the right input
+            if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.project)) {
+                inputs.projectId = result.project;
+                inputs.project = '';
+            } else {
+                inputs.projectId = '';            
+                inputs.project = result.project;
+            }
+
+            resolve(inputs);
+        }));
 }
 
 function getPatAuthorizationHeader(pat) {
@@ -46,7 +61,7 @@ function getPatAuthorizationHeader(pat) {
     return auth;
 }
 
-function getVstsInfo(inputs) {
+async function getVstsInfo(inputs) {
     const client = new Client();
     const args = {
         headers: { 
@@ -56,58 +71,198 @@ function getVstsInfo(inputs) {
     };
 
     console.log('Getting vsts info:')
-    client.get(inputs.url + '/_git/' + inputs.project + '/vsts/info', args, function (data, response) {
-        if (Buffer.isBuffer(data)) {
-            console.log(`Unable to get vsts info for project: ${inputs.project}. Check your PAT. Details:`);
-            console.log(new Buffer(data).toString('ascii'));
-        } else if (data && data.message) {
-            console.log(data.message);
-        } else if (data) {
-            console.log(`   collectionId = ${data.collection.id}`);
-            console.log(`   projectId = ${data.repository.project.id}`);
-            inputs.collectionId = data.collection.id;
-            inputs.projectId = data.repository.project.id;
-            createConnection(inputs);
-        }
-    }); 
+    const result = await client.getPromise(inputs.url + '/_git/' + inputs.project + '/vsts/info', args);
+    const data = result.data;
+    if (Buffer.isBuffer(data)) {
+        console.log(`Unable to get vsts info for project: ${inputs.project}. Check your PAT. Details:`);
+        console.log(new Buffer(data).toString('ascii'));
+    } else if (data && data.message) {
+        console.log(data.message);
+    } else if (data) {
+        console.log(`   collectionId = ${data.collection.id}`);
+        console.log(`   projectId = ${data.repository.project.id}`);
+        inputs.collectionId = data.collection.id;
+        inputs.projectId = data.repository.project.id;
+        createConnection(inputs);
+    }
 }
 
-function createConnection(inputs) {
+async function createConnection(inputs) {
     const client = new Client();
     const args = {
         headers: { 
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         },
+        // TODO remove yamlPath when you remove the OLD API code paths
         data: `{
-                "accountId": "${inputs.collectionId}",
-                "teamProjectId": "${inputs.projectId}",
-                "repositoryId": "${inputs.repoName}",
-                "repositoryName": "${inputs.repoName}",
-                "targetBranch": "${inputs.branch}",
-                "yamlPath": "${inputs.yamlPath}",
-                "providerData": "${inputs.installationId}"
-               }`        
+                   "providerId": "github",
+                   "project": {    
+                       "Id": "${inputs.projectId}",
+                       "name": "${inputs.project}",
+                       "visibility": 0
+                   },
+                   "repositoryId": "${inputs.repoName}",
+                   "repositoryName": "${inputs.repoName}",
+                   "targetBranch": "master",
+                   "configurationFilePath": ".vsts/microsoft.yml",
+                   "yamlPath": ".vsts/microsoft.yml",
+                   "providerData": { "installationId": "${inputs.installationId}" }
+               }`
     };
+    let apiURL = inputs.url + '/_apis/Pipelines/Connections?api-version=4.1-preview';
+    if (inputs.useOldAPI) {
+        args.data = `{
+            "providerId": "github",
+            "project": {    
+                "Id": "${inputs.projectId}",
+                "name": "${inputs.project}",
+                "visibility": 0
+            },
+            "repositoryId": "${inputs.repoName}",
+            "repositoryName": "${inputs.repoName}",
+            "targetBranch": "master",
+            "yamlPath": ".vsts/microsoft.yml",
+            "providerData": "${inputs.installationId}"
+        }`
+    }
 
     console.log('Creating connection:')
-    client.post(inputs.url + '/_apis/Pipelines/Connections?provider=github&api-version=4.1-preview', args, function (data, response) {
-        if (Buffer.isBuffer(data)) {
-            const text = new Buffer(data).toString('ascii');
-            if (text.startsWith('{')) {
-                const json = JSON.parse(text);
-                console.log(`   Connection created. Token =>`);
-                console.log(`   ${json.token}`);
-            } else {
-                console.log(`Unable to create connection. inputs: ${JSON.stringify(args.data)}. Details:`);
-                console.log(text);
+    const result = await client.postPromise(apiURL, args);
+    const json = getJson(result);
+    if (json) {
+        if (json.status === 'succeeded') {
+            console.log(`   Connection created. Token =>`);
+            if (inputs.useOldAPI) {
+                console.log(`   ${json.connection.token}`);                
             }
-        } else if (data && data.message) {
-            console.log(data.message);
+            console.log(`   ${json.resultMessage}`);                 
         } else {
-            console.log('Unknown error occured');
+            let operationsUrl = json.url;
+            if (inputs.useOldAPI) {
+                operationsUrl = `${inputs.url}/_apis/operations/${json.jobId}`;
+            }
+            console.log(`   Connection creation queued. Operation Url =>`);
+            console.log(`   ${operationsUrl}`);
+            const projectCreated = await waitForProjectCreation(operationsUrl, inputs);
+            if (projectCreated) {
+                const definitionId = await waitForDefinitionCreation(inputs);
+                if (definitionId > 0) {
+                    const definition = await getDefinition(inputs, definitionId);
+                    if (definition) {
+                        console.log(`   Connection created. Token =>`);
+                        console.log(`   ${definition.properties.PipelinesToken.$value}`);
+                        return;
+                    }
+                }
+            }
         }
-    });        
+    }
+}
+
+async function waitForProjectCreation(operationUrl, inputs) {
+    const client = new Client();
+    const args = {
+        headers: { 
+            'content-type': 'application/json',
+            'Authorization': getPatAuthorizationHeader(inputs.pat)
+        }};
+
+    console.log('Waiting for project creation to complete:')
+    while (true) {
+        await sleep(5);
+        const result = await client.getPromise(operationUrl, args);
+        const json = getJson(result);
+        if (!json) {
+            break;
+        }
+        if (json.status === 'succeeded') {
+            console.log(`   Team project ${inputs.project} created.`);
+            return true;
+        } else if (json.status === 'failed') {
+            console.log(`   Team project failed to be created. Project name = ${inputs.project}.`);
+            break;
+        }
+        // continue in the loop
+    }
+    return false;
+}
+
+function getJson(result) {
+    const data = result.data;
+    if (Buffer.isBuffer(data)) {
+        const text = new Buffer(data).toString('ascii');
+        if (text.startsWith('{')) {
+            const json = JSON.parse(text);
+            return json;
+        } else {
+            console.log(`Unable to get json. Details:`);                
+            console.log(text);
+            console.log(result.response);
+        }
+    } else if (data && data.message) {
+        console.log(data.message);
+    } else {
+        console.log('Unknown error occured');
+    }
+    return undefined;
+}
+
+async function waitForDefinitionCreation(inputs) {
+    const client = new Client();
+    const args = {
+        headers: { 
+            'content-type': 'application/json',
+            'Authorization': getPatAuthorizationHeader(inputs.pat)
+        }};
+
+    console.log('Waiting for definition creation to complete:');
+    const definitionUrl = `${inputs.url}/${inputs.project}/_apis/build/definitions`;
+    while(true) {
+        await sleep(1);
+        const result = await client.getPromise(definitionUrl, args);
+        const json = getJson(result);
+        if (!json) {
+            break;
+        }
+        if (json.count > 0) {
+            const definitionId = json.value[0].id;
+            console.log(`   Definition ${definitionId} created.`);
+            return definitionId;
+        }
+        // continue with the loop
+    }
+    return -1;
+}
+
+async function getDefinition(inputs, definitionId) {
+    const client = new Client();
+    const args = {
+        headers: { 
+            'content-type': 'application/json',
+            'Authorization': getPatAuthorizationHeader(inputs.pat)
+        }};
+
+    console.log('Getting definition properties:');
+    const definitionUrl = `${inputs.url}/${inputs.project}/_apis/build/definitions/${definitionId}?propertyFilters=*`;
+    const result = await client.getPromise(definitionUrl, args);
+    const json = getJson(result);
+    if (json && json.id === definitionId) {
+        return json;
+    }
+    return undefined;
+}
+
+function sleep(seconds) {
+    return new Promise(resolve => {
+        setTimeout(resolve, seconds * 1000);
+    });
 }
  
+async function run(inputs) {
+    inputs = await getInputs(inputs);
+    await createConnection(inputs);
+    console.log('done.');
+}
+
 run(inputs);

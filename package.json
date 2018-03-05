@@ -5,8 +5,8 @@
     "main": "main.js",
     "author": "jpricket",
     "dependencies": {
-      "node-rest-client": "^3.1.0",
-      "prompt": "^1.0.0",
-      "optimist": "^0.6.1"
+        "node-rest-client-promise": "^3.1.0",
+        "prompt": "^1.0.0",
+        "optimist": "^0.6.1"
     }
 }
