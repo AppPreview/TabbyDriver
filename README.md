@@ -11,8 +11,7 @@ You can provide the needed information on the command line or you will be prompt
 
     >node createConnection.js --useOldAPI true --url https://tabbydemo.visualstudio.com --project Tabby-jlp5 --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
 
-    Getting vsts info:
-       collectionId = 2c31a8a4-3ce2-4230-954d-29653ac881d9
-       projectId = adc3d884-75ff-48ed-9c9f-e1f126d5be30
     Creating connection:
-       Connection created.
+       Connection created. Token =>
+       eyJBY2NvdW50SWQiOiI3Y2JiMmZkZS02NDk5LTRlZjQtYjdhNS01ZWE0YmZmMGFlZDciLCJUZWFtUHJvamVjdElkIjoiNjQwOTI1NDktMzFhNC00NTQ3LWI1OTQtMDBhZGNlZGY0ODg1IiwiUmVwb3NpdG9yeUlkIjoieHBsYXRhbG0vY3Vja29vIiwiUmVwb3NpdG9yeU5hbWUiOiJ4cGxhdGFsbS9jdWNrb28iLCJUYXJnZXRCcmFuY2giOiJtYXN0ZXIiLCJEZWZpbml0aW9uSWQiOjE0fQ==
+    done.
