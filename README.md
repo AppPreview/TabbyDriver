@@ -3,6 +3,7 @@ This nodeJS app prompts the user for inputs and then creates a Tabby connection 
 
 ## To Install
 Note: you may need a newer version of nodeJS that supports the async/await pattern.
+
     >cd TabbyDriver
     >npm install
 
