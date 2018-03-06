@@ -36,7 +36,7 @@ async function getInputs(inputs) {
                 reject(err);
                 return;
             }
-            inputs.useOldAPI = result.useOldAPI;
+            inputs.useOldAPI = result.useOldAPI.toLowerCase() === "true";
             inputs.url = result.url;
             inputs.pat = result.pat;
             inputs.repoName = result.repo;
