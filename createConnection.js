@@ -70,21 +70,20 @@ async function getVstsInfo(inputs) {
         }
     };
 
-    console.log('Getting vsts info:')
     const result = await client.getPromise(inputs.url + '/_git/' + inputs.project + '/vsts/info', args);
     const data = result.data;
-    if (Buffer.isBuffer(data)) {
-        console.log(`Unable to get vsts info for project: ${inputs.project}. Check your PAT. Details:`);
-        console.log(new Buffer(data).toString('ascii'));
-    } else if (data && data.message) {
-        console.log(data.message);
-    } else if (data) {
-        console.log(`   collectionId = ${data.collection.id}`);
-        console.log(`   projectId = ${data.repository.project.id}`);
-        inputs.collectionId = data.collection.id;
-        inputs.projectId = data.repository.project.id;
-        createConnection(inputs);
+    if (result.response.statusCode < 200 || result.response.statusCode >= 300) {
+        console.log('Getting VSTS Info failed. RESPONSE: ' + result.response.statusCode);
+        return { 
+            collectionId: 'unknown', 
+            projectId: 'unknown'
+        };
     }
+
+    return { 
+        collectionId: data.collection.id, 
+        projectId: data.repository.project.id
+    };
 }
 
 async function createConnection(inputs) {
@@ -150,10 +149,11 @@ async function createConnection(inputs) {
                 const definitionId = await waitForDefinitionCreation(inputs);
                 if (definitionId > 0) {
                     const definition = await getDefinition(inputs, definitionId);
-                    if (definition) {
+                    if (definition && definition.properties && definition.properties.PipelinesToken) {
                         console.log(`   Connection created. Token =>`);
                         console.log(`   ${definition.properties.PipelinesToken.$value}`);
-                        return;
+                    } else {
+                        console.log(`   Something happened trying to get the definition from url: ${inputs.url}/${inputs.project}/_apis/build/definitions/${definitionId}?propertyFilters=*`);
                     }
                 }
             }
@@ -178,7 +178,10 @@ async function waitForProjectCreation(operationUrl, inputs) {
             break;
         }
         if (json.status === 'succeeded') {
+            const info = await getVstsInfo(inputs);
             console.log(`   Team project ${inputs.project} created.`);
+            console.log(`   collectionId: ${info.collectionId}`);
+            console.log(`   projectId: ${info.projectId}`);
             return true;
         } else if (json.status === 'failed') {
             console.log(`   Team project failed to be created. Project name = ${inputs.project}.`);
@@ -229,7 +232,7 @@ async function waitForDefinitionCreation(inputs) {
     console.log('Waiting for definition creation to complete:');
     const definitionUrl = `${inputs.url}/${inputs.project}/_apis/build/definitions`;
     while(true) {
-        await sleep(1);
+        await sleep(5);
         const result = await client.getPromise(definitionUrl, args);
         const json = getJson(result);
         if (!json) {
