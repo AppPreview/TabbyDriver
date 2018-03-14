@@ -1,7 +1,6 @@
 var prompt = require('prompt');
 var optimist = require('optimist');
 var Client = require('node-rest-client-promise').Client;
-var jwt = require('json-web-token');
 
 var inputs = {
     useOldAPI: true,
