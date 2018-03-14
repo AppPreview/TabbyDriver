@@ -1,6 +1,7 @@
 var prompt = require('prompt');
 var optimist = require('optimist');
 var Client = require('node-rest-client-promise').Client;
+var jwt = require('json-web-token');
 
 var inputs = {
     useOldAPI: true,
@@ -21,7 +22,6 @@ async function getInputs(inputs) {
     prompt.start();
     var schema = {
         properties: {
-          useOldAPI: { required: true, description: "Use the OLD api", default: inputs.useOldAPI },
           url: { required: true, description: "VSTS account URL", default: inputs.url },
           project: { required: true, description: "New project name (or existing id)", default: inputs.project},
           pat: { required: true, description: "PAT token", default: inputs.pat, hidden: true},
@@ -36,7 +36,7 @@ async function getInputs(inputs) {
                 reject(err);
                 return;
             }
-            inputs.useOldAPI = result.useOldAPI.toLowerCase() === "true";
+            inputs.useOldAPI = !(result.url.indexOf('.vsts.me') > -1);
             inputs.url = result.url;
             inputs.pat = result.pat;
             inputs.repoName = result.repo;
@@ -149,9 +149,8 @@ async function createConnection(inputs) {
                 const definitionId = await waitForDefinitionCreation(inputs);
                 if (definitionId > 0) {
                     const definition = await getDefinition(inputs, definitionId);
-                    if (definition && definition.properties && definition.properties.PipelinesToken) {
-                        console.log(`   Connection created. Token =>`);
-                        console.log(`   ${definition.properties.PipelinesToken.$value}`);
+                    if (definition && definition.properties && definition.properties.PipelinesProvider) {
+                        console.log(`   Connection created correctly for provider ${definition.properties.PipelinesProvider.$value}.`);
                     } else {
                         console.log(`   Something happened trying to get the definition from url: ${inputs.url}/${inputs.project}/_apis/build/definitions/${definitionId}?propertyFilters=*`);
                     }
