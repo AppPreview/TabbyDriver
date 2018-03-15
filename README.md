@@ -12,7 +12,7 @@ You can provide the needed information on the command line or you will be prompt
 
 Creating a new project... ***use a new project name***
 
-    >node createConnection.js --url https://tabbydemo.visualstudio.com **--project ANewProject** --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
+    >node createConnection.js --url https://tabbydemo.visualstudio.com --project ANewProject --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
 
     Creating connection:
         Connection creation queued. Operation Url =>
@@ -29,7 +29,7 @@ Creating a new project... ***use a new project name***
 
 Making a connection in an existing project... ***use the project id***
 
-    >node createConnection.js --url https://tabbydemo.visualstudio.com **--project 30ce0e59-b36f-4d5a-a857-6b255ec49eae** --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
+    >node createConnection.js --url https://tabbydemo.visualstudio.com --project 30ce0e59-b36f-4d5a-a857-6b255ec49eae --repo xplatalm/cuckoo --branch master --installationId 75537 --pat yourPATinfoHere
 
     Creating connection:
         Connection created. Token =>
