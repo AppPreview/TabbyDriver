@@ -1,10 +1,14 @@
 const Client = require('node-rest-client-promise').Client;
-var prompt = require('prompt');
-var optimist = require('optimist');
+const prompt = require('prompt');
+const optimist = require('optimist');
+const path = require('path');
+const fs = require('fs');
 
 let inputs = {
-    url: 'https://x-pipes.vsts.me',
-    repoName: 'xplatalm/cuckoo'
+    url: 'https://x-pipes.visualstudio.com',
+    repoName: 'xplatalm/cuckoo',
+    interviewType: '',
+    configFolder: ''
 }
 
 prompt.override = optimist.argv;
@@ -27,7 +31,11 @@ async function getInterview(inputs) {
     };
 
     console.log('Getting interview:')
-    const result = await client.postPromise(inputs.url + '/_apis/public/pipelines/interviews?api-version=5.0-preview.1', args);
+    let url = inputs.url + '/_apis/public/pipelines/interviews?api-version=5.0-preview.1';
+    if (inputs.interviewType) {
+        url = url + `&type=${inputs.interviewType}`;
+    }
+    const result = await client.postPromise(url, args);
     const interview = getJson(result);
     return interview;
 }
@@ -41,16 +49,23 @@ async function getConfiguration(answers) {
         },
         data: {
             languageTag: "en-us",
-            repository: {
-                id: inputs.repoName
+            answers: {
             }
         }
     };
 
-    console.log('Getting interview:')
-    const result = await client.postPromise(inputs.url + '/_apis/public/pipelines/interviews?api-version=5.0-preview.1', args);
-    const interview = getJson(result);
-    return interview;
+    for (answer in answers) {
+        args.data.answers[answer] = answers[answer];
+    }
+
+    console.log('Getting config:')
+    let url = inputs.url + '/_apis/public/pipelines/configurations?api-version=5.0-preview.1';
+    if (inputs.interviewType) {
+        url = url + `&type=${inputs.interviewType}`;
+    }
+    const result = await client.postPromise(url, args);
+    const config = getJson(result);
+    return config;
 }
 
 function getJson(result) {
@@ -125,18 +140,57 @@ async function promptForInterviewAnswers(interview) {
     return await askQuestions(schema);
 }
 
+async function createFile(filename, data) {
+    return new Promise((resolve, reject) => 
+        fs.writeFile(filename, data, function(err) {
+            if (err) {
+                reject(err);
+                return;
+            }
+
+            resolve();
+        }));
+}
+
+async function writeConfigFiles(config, folderPath) {
+    for (const configFile of config.files) {
+        const filePath = path.resolve(path.join(folderPath, configFile.path));
+        const dir = path.dirname(filePath);
+        if (!fs.existsSync(dir)){
+            fs.mkdirSync(dir);
+        }
+        let content = configFile.content;
+        if (configFile.isBase64Encoded) {
+            content = Buffer.from(content, 'base64');
+        }
+        await createFile(filePath, content);
+    }
+}
+
 async function run(inputs) {
+    // Check args
+    inputs.interviewType = optimist.argv.type;
+    inputs.configFolder = optimist.argv.configFolder;
+    inputs.repoName = optimist.argv.repo;
+
     // Get an interview
     const interview = await getInterview(inputs);
     if (interview) {
         // Prompt for answers to interview questions
         const answers = await promptForInterviewAnswers(interview);
 
-        console.log(answers);
         // Create configuration
-        // const files = getConfiguration(answers);
-    
-        // Display configuration files
+        const config = await getConfiguration(answers);
+        
+        if (inputs.configFolder) {
+            await writeConfigFiles(config, inputs.configFolder);
+            console.log(`\nConfig files written to ${inputs.configFolder}`);
+        } else {
+            // Display configuration files
+            console.log('\n******** Configuration Files *********');
+            console.log(config);
+            console.log('**************************************\n');
+        }
     } else {
         console.log("Unable to get interview.");
     }
