@@ -35,7 +35,7 @@ async function getInputs(inputs) {
                 reject(err);
                 return;
             }
-            inputs.useOldAPI = !(result.url.indexOf('.vsts.me') > -1);
+            inputs.useOldAPI = false;
             inputs.url = result.url;
             inputs.pat = result.pat;
             inputs.repoName = result.repo;

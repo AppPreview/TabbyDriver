@@ -169,6 +169,7 @@ async function writeConfigFiles(config, folderPath) {
 
 async function run(inputs) {
     // Check args
+    inputs.url = optimist.argv.url || inputs.url;
     inputs.interviewType = optimist.argv.type;
     inputs.configFolder = optimist.argv.configFolder;
     inputs.repoName = optimist.argv.repo;
