@@ -75,6 +75,8 @@ async function sendEvent(inputs) {
     let apiURL = 'https://x-pipes.visualstudio.com/_apis/public/Pipelines/Events?provider=github&api-version=4.1-preview';
     if (inputs.url && inputs.url.indexOf('.vsts.me') > -1) {
         apiURL = 'https://x-pipes.vsts.me/_apis/public/Pipelines/Events?provider=github&api-version=4.1-preview';
+    } else if (inputs.url && inputs.url.indexOf('codedev.ms') > -1) {
+        apiURL = 'https://x-pipes.vsts.me/_apis/public/Pipelines/Events?provider=github&api-version=4.1-preview';
     }
 
     console.log('Sending event:')

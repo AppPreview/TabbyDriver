@@ -131,7 +131,7 @@ async function createConnection(inputs) {
     if (json) {
         if (json.status === 'succeeded' || json.status === 'Complete') {
             console.log(`   Connection created. Token =>`);
-            if (inputs.useOldAPI) {
+            if (inputs.useOldAPI && json.connection) {
                 console.log(`   ${json.connection.token}`);                
             } else {
                 console.log(`   ${json.resultMessage}`);                 
