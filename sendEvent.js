@@ -19,7 +19,7 @@ async function getInputs(inputs) {
     var schema = {
         properties: {
           url: { required: true, description: "VSTS account URL", default: inputs.url },
-          token: { required: true, description: "Resources token", default: inputs.token },
+          token: { required: false, description: "Resources token", default: inputs.token },
           secret: { required: true, description: "Signing secret", default: inputs.signingSecret },
           payload: { required: true, description: "Payload file name", default: inputs.payloadFilename }
         }
