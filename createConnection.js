@@ -3,7 +3,6 @@ var optimist = require('optimist');
 var Client = require('node-rest-client-promise').Client;
 
 var inputs = {
-    useOldAPI: true,
     url: 'https://tabbydemo.visualstudio.com',
     pat: '',
     projectId: '',
@@ -11,7 +10,8 @@ var inputs = {
     repoName: 'xplatalm/cuckoo', // Need new test repo
     branch: 'master',
     installationId: '75537', // Need new App id
-    yamlPath: '.vsts/microsoft.yml'
+    yamlPath: '.vsts/microsoft.yml',
+    routing: 'ResourcesToken'
 }
 
 // Get any command line args to override prompts
@@ -27,6 +27,7 @@ async function getInputs(inputs) {
           repo: { required: true, description: "GitHub repo name", default: inputs.repoName },
           branch: { required: true, description: "Repo branch", default: inputs.branch },
           installationId: { required: true, description: "GitHub app installation id", default: inputs.installationId },
+          routing: { required: true, description: "Connection routing method (ResourceToken | HostIdMapping)", default: inputs.routing },
         }
       };
     return new Promise((resolve, reject) => 
@@ -35,19 +36,19 @@ async function getInputs(inputs) {
                 reject(err);
                 return;
             }
-            inputs.useOldAPI = false;
             inputs.url = result.url;
             inputs.pat = result.pat;
             inputs.repoName = result.repo;
             inputs.branch = result.branch;
             inputs.installationId = result.installationId;
+            inputs.routing = result.routing;
 
             // If the user passed in the project Id, put it in the right input
             if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(result.project)) {
                 inputs.projectId = result.project;
                 inputs.project = '';
             } else {
-                inputs.projectId = '';            
+                inputs.projectId = '';
                 inputs.project = result.project;
             }
 
@@ -87,12 +88,12 @@ async function getVstsInfo(inputs) {
 
 async function createConnection(inputs) {
     const client = new Client();
+    const createDefinition = inputs.routing === 'ResourcesToken' ? true : false;
     const args = {
         headers: { 
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         },
-        // TODO remove yamlPath when you remove the OLD API code paths
         data: `{
                    "providerId": "github",
                    "project": {    
@@ -104,26 +105,12 @@ async function createConnection(inputs) {
                    "repositoryName": "${inputs.repoName}",
                    "targetBranch": "master",
                    "configurationFilePath": ".vsts/microsoft.yml",
-                   "yamlPath": ".vsts/microsoft.yml",
-                   "providerData": { "installationId": "${inputs.installationId}" }
+                   "providerData": { "installationId": "${inputs.installationId}" },
+                   "routingMethod": "${inputs.routing}",
+                   "createBuildDefinition": ${createDefinition}
                }`
     };
     let apiURL = inputs.url + '/_apis/Pipelines/Connections?api-version=4.1-preview';
-    if (inputs.useOldAPI) {
-        args.data = `{
-            "providerId": "github",
-            "project": {    
-                "Id": "${inputs.projectId}",
-                "name": "${inputs.project}",
-                "visibility": 0
-            },
-            "repositoryId": "${inputs.repoName}",
-            "repositoryName": "${inputs.repoName}",
-            "targetBranch": "master",
-            "yamlPath": ".vsts/microsoft.yml",
-            "providerData": "${inputs.installationId}"
-        }`
-    }
 
     console.log('Creating connection:')
     const result = await client.postPromise(apiURL, args);
@@ -131,16 +118,10 @@ async function createConnection(inputs) {
     if (json) {
         if (json.status === 'succeeded' || json.status === 'Complete') {
             console.log(`   Connection created. Token =>`);
-            if (inputs.useOldAPI && json.connection) {
-                console.log(`   ${json.connection.token}`);                
-            } else {
-                console.log(`   ${json.resultMessage}`);                 
-            }
+            console.log(`   ${json.resultMessage}`);
+            console.log(`   Definition: ${json.url}`);
         } else {
             let operationsUrl = json.url;
-            if (inputs.useOldAPI) {
-                operationsUrl = `${inputs.url}/_apis/operations/${json.jobId}`;
-            }
             console.log(`   Connection creation queued. Operation Url =>`);
             console.log(`   ${operationsUrl}`);
             const projectCreated = await waitForProjectCreation(operationsUrl, inputs);
@@ -206,7 +187,7 @@ function getJson(result) {
             const json = JSON.parse(text);
             return json;
         } else {
-            console.log(`Unable to get json. Details:`);                
+            console.log(`Unable to get json. Details:`);
             console.log(text);
             console.log(result.response);
         }
