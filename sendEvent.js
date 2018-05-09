@@ -8,7 +8,8 @@ var inputs = {
     url: 'https://tabbydemo.visualstudio.com',
     token: '',
     signingSecret: '',
-    payloadFilename: 'payload.json'
+    payloadFilename: 'payload.json',
+    eventType: 'check_suite'
 }
 
 // Get any command line args to override prompts
@@ -21,7 +22,8 @@ async function getInputs(inputs) {
           url: { required: true, description: "VSTS account URL", default: inputs.url },
           token: { required: false, description: "Resources token", default: inputs.token },
           secret: { required: true, description: "Signing secret", default: inputs.signingSecret },
-          payload: { required: true, description: "Payload file name", default: inputs.payloadFilename }
+          payload: { required: true, description: "Payload file name", default: inputs.payloadFilename },
+          eventType: { required: true, description: "Event type (check_suite, pull_request, push)", default: inputs.eventType }
         }
       };
     return new Promise((resolve, reject) => 
@@ -34,6 +36,7 @@ async function getInputs(inputs) {
             inputs.token = result.token;
             inputs.signingSecret = result.secret;
             inputs.payloadFilename = result.payload;
+            inputs.eventType = result.eventType;
 
             resolve(inputs);
         }));
@@ -65,7 +68,7 @@ async function sendEvent(inputs) {
         headers: { 
             'content-type': 'application/json',
             'x-github-delivery': '78f3c850-013f-11e8-8cd2-115ebdd95f8b',
-            'x-github-event': 'check_suite',
+            'x-github-event': inputs.eventType,
             'x-hub-signature': `sha1=${payloadSignature}`,
             'x-github-resources': inputs.token
         },
