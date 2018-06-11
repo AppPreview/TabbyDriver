@@ -22,7 +22,7 @@ async function getInputs(inputs) {
     var schema = {
         properties: {
           url: { required: true, description: "VSTS account URL", default: inputs.url },
-          project: { required: true, description: "New project name (or existing id)", default: inputs.project},
+          project: { required: true, description: "New project name (or existing project id)", default: inputs.project},
           pat: { required: true, description: "PAT token", default: inputs.pat, hidden: true},
           repo: { required: true, description: "GitHub repo name", default: inputs.repoName },
           branch: { required: true, description: "Repo branch", default: inputs.branch },
@@ -30,12 +30,18 @@ async function getInputs(inputs) {
           routing: { required: true, description: "Connection routing method (ResourceToken | HostIdMapping)", default: inputs.routing },
         }
       };
-    return new Promise((resolve, reject) => 
+    return new Promise((resolve, reject) =>
         prompt.get(schema, function (err, result) {
             if (err) {
                 reject(err);
                 return;
             }
+
+            if (result.pat.length != 52) {
+                reject('PAT should be 52 characters.');
+                return;
+            }
+
             inputs.url = result.url;
             inputs.pat = result.pat;
             inputs.repoName = result.repo;
@@ -64,7 +70,7 @@ function getPatAuthorizationHeader(pat) {
 async function getVstsInfo(inputs) {
     const client = new Client();
     const args = {
-        headers: { 
+        headers: {
             'accept': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         }
@@ -74,14 +80,14 @@ async function getVstsInfo(inputs) {
     const data = result.data;
     if (result.response.statusCode < 200 || result.response.statusCode >= 300) {
         console.log('Getting VSTS Info failed. RESPONSE: ' + result.response.statusCode);
-        return { 
-            collectionId: 'unknown', 
+        return {
+            collectionId: 'unknown',
             projectId: 'unknown'
         };
     }
 
-    return { 
-        collectionId: data.collection.id, 
+    return {
+        collectionId: data.collection.id,
         projectId: data.repository.project.id
     };
 }
@@ -90,13 +96,13 @@ async function createConnection(inputs) {
     const client = new Client();
     const createDefinition = inputs.routing === 'ResourcesToken' ? true : false;
     const args = {
-        headers: { 
+        headers: {
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         },
         data: `{
                    "providerId": "github",
-                   "project": {    
+                   "project": {
                        "Id": "${inputs.projectId}",
                        "name": "${inputs.project}",
                        "visibility": 0
@@ -124,16 +130,25 @@ async function createConnection(inputs) {
             let operationsUrl = json.url;
             console.log(`   Connection creation queued. Operation Url =>`);
             console.log(`   ${operationsUrl}`);
-            const projectCreated = await waitForProjectCreation(operationsUrl, inputs);
-            if (projectCreated) {
-                const definitionId = await waitForDefinitionCreation(inputs);
-                if (definitionId > 0) {
-                    const definition = await getDefinition(inputs, definitionId);
-                    if (definition && definition.properties && definition.properties.PipelinesProvider) {
-                        console.log(`   Connection created correctly for provider ${definition.properties.PipelinesProvider.$value}.`);
-                    } else {
-                        console.log(`   Something happened trying to get the definition from url: ${inputs.url}/${inputs.project}/_apis/build/definitions/${definitionId}?propertyFilters=*`);
+            const createdProjectId = await waitForProjectCreation(operationsUrl, inputs);
+            if (createdProjectId) {
+                if (inputs.routing == 'ResourceToken') {
+                    // "Tabby" flow. Poll the service until a build definition shows up.
+                    const definitionId = await waitForDefinitionCreation(inputs);
+                    if (definitionId > 0) {
+                        const definition = await getDefinition(inputs, definitionId);
+                        if (definition && definition.properties && definition.properties.PipelinesProvider) {
+                            console.log(`   Connection created correctly for provider ${definition.properties.PipelinesProvider.$value}.`);
+                        } else {
+                            console.log(`   Something happened trying to get the definition from url: ${inputs.url}/${inputs.project}/_apis/build/definitions/${definitionId}?propertyFilters=*`);
+                        }
                     }
+                }
+                else {
+                    // "Chesire" flow. Redirect the user to create the first build definition.
+                    console.log('Creating the connection a second time, just to get the redirect url for creating a new build definition.');
+                    inputs.projectId = createdProjectId;
+                    await createConnection(inputs);
                 }
             }
         }
@@ -143,7 +158,7 @@ async function createConnection(inputs) {
 async function waitForProjectCreation(operationUrl, inputs) {
     const client = new Client();
     const args = {
-        headers: { 
+        headers: {
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         }};
@@ -161,14 +176,15 @@ async function waitForProjectCreation(operationUrl, inputs) {
             console.log(`   Team project ${inputs.project} created.`);
             console.log(`   collectionId: ${info.collectionId}`);
             console.log(`   projectId: ${info.projectId}`);
-            return true;
+
+            return info.projectId;
         } else if (json.status === 'failed') {
             console.log(`   Team project failed to be created. Project name = ${inputs.project}.`);
             break;
         }
         // continue in the loop
     }
-    return false;
+    return null;
 }
 
 function getJson(result) {
@@ -203,7 +219,7 @@ function getJson(result) {
 async function waitForDefinitionCreation(inputs) {
     const client = new Client();
     const args = {
-        headers: { 
+        headers: {
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         }};
@@ -222,6 +238,7 @@ async function waitForDefinitionCreation(inputs) {
             console.log(`   Definition ${definitionId} created.`);
             return definitionId;
         }
+        console.log("Definition not created yet. Sleeping and checking again.");
         // continue with the loop
     }
     return -1;
@@ -230,7 +247,7 @@ async function waitForDefinitionCreation(inputs) {
 async function getDefinition(inputs, definitionId) {
     const client = new Client();
     const args = {
-        headers: { 
+        headers: {
             'content-type': 'application/json',
             'Authorization': getPatAuthorizationHeader(inputs.pat)
         }};
@@ -250,7 +267,7 @@ function sleep(seconds) {
         setTimeout(resolve, seconds * 1000);
     });
 }
- 
+
 async function run(inputs) {
     inputs = await getInputs(inputs);
     await createConnection(inputs);
