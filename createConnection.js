@@ -27,7 +27,7 @@ async function getInputs(inputs) {
           repo: { required: true, description: "GitHub repo name", default: inputs.repoName },
           branch: { required: true, description: "Repo branch", default: inputs.branch },
           installationId: { required: true, description: "GitHub app installation id", default: inputs.installationId },
-          routing: { required: true, description: "Connection routing method (ResourceToken | HostIdMapping)", default: inputs.routing },
+          routing: { required: true, description: "Connection routing method (ResourcesToken | HostIdMapping)", default: inputs.routing },
         }
       };
     return new Promise((resolve, reject) =>
